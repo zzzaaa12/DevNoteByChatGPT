@@ -4,6 +4,9 @@ import tkinter as tk
 import datetime
 from tkinter import messagebox
 import shutil
+import re
+import webbrowser
+
 #import subprocess
 #DETACHED_PROCESS = 0x00000008
 #subprocess.Popen(["pythonw", "NewDevNote.pyw"], creationflags=DETACHED_PROCESS, close_fds=True)
@@ -22,7 +25,7 @@ class TextBlock:
         self.y_scrollbar.pack(side='right', fill='y')
         self.x_scrollbar = tk.Scrollbar(self.frame, orient='horizontal', bg='white', activebackground='gray')
         self.x_scrollbar.pack(side='bottom', fill='x')
-        self.text = tk.Text(self.frame, wrap='none', xscrollcommand=self.x_scrollbar.set, yscrollcommand=self.y_scrollbar.set, bg=bkcolor[idx], fg=fgcolor[idx], font=('Consolas', 14), undo=True)
+        self.text = tk.Text(self.frame, wrap='none', xscrollcommand=self.x_scrollbar.set, yscrollcommand=self.y_scrollbar.set, bg=bkcolor[idx], fg=fgcolor[idx], font=('Consolas', 13), undo=True)
         self.text.pack(side='left', fill='both', expand=True)
         self.x_scrollbar.config(command=self.text.xview)
         self.y_scrollbar.config(command=self.text.yview)
@@ -32,6 +35,72 @@ class TextBlock:
         self.load_text()
         self.text.bind("<Control-z>", self.undo)
         self.text.bind("<Control-y>", self.redo)
+
+        # bind right mouse button
+        self.text.bind("<Button-3>", self.show_popup_menu)
+        self.selected_text = ''
+
+    def show_popup_menu(self, event):
+        self.selected_text = self.text.get(tk.SEL_FIRST, tk.SEL_LAST)
+
+        popup_menu = tk.Menu(self.text, tearoff=0)
+        popup_menu.add_command(label="Cut", accelerator="Ctrl+X", command=self.cut)
+        popup_menu.add_command(label="Copy", accelerator="Ctrl+C", command=self.copy)
+        popup_menu.add_command(label="Paste", accelerator="Ctrl+V", command=self.paste)
+        popup_menu.add_separator()
+        if self.is_url(self.selected_text):
+            popup_menu.add_command(label="Open in Browser", command=self.open_url)
+        popup_menu.tk_popup(event.x_root, event.y_root)
+
+        self.text.focus_set()
+
+    def cut(self, event=None):
+        self.text.event_generate("<<Cut>>")
+
+    def copy(self, event=None):
+        self.text.event_generate("<<Copy>>")
+
+    def paste(self, event=None):
+        self.text.event_generate("<<Paste>>")
+
+    def open_url(self, event=None):
+        webbrowser.open(self.selected_text)
+
+    def is_url(self, text):
+        # regex pattern to match url
+        pattern = re.compile(
+            r'(?:(?:https?|ftp):\/\/)?[\w/\-?=%.]+\.[\w/\-?=%.]+'
+        )
+        if pattern.match(text):
+            return True
+        else:
+            return False
+
+    def show_menu(self, event):
+        """Shows the context menu"""
+        try:
+            self.text.tag_remove("sel", "1.0", "end")
+            self.text.tag_add("sel", "insert")
+        except tk.TclError:
+            pass
+
+        if self.is_link_selected():
+            self.menu.entryconfigure("用瀏覽器開啟", state="normal")
+        else:
+            self.menu.entryconfigure("用瀏覽器開啟", state="disabled")
+
+        self.menu.tk_popup(event.x_root, event.y_root)
+
+    def is_link_selected(self):
+        """Returns True if a link is selected"""
+        tags = self.text.tag_names("sel.first")
+        return "url" in tags
+
+    def open_link_in_browser(self):
+        """Opens the selected link in the default browser"""
+        sel = self.text.get("sel.first", "sel.last")
+        if self.is_link_selected() and sel.startswith("http"):
+            webbrowser.open(sel)
 
     def save_text(self):
         with open(self.filepath, 'w', encoding='utf-8') as f:
@@ -170,7 +239,7 @@ class App:
             remove_path = self.backup_dir + '/' + last2day
             if os.path.exists(remove_path):
                 shutil.rmtree(remove_path)
-            
+
     def update_title(self):
         now = time.strftime('%Y.%m.%d %H:%M')
         self.root.title(f"Alex's DevNote - saved at {now}")
